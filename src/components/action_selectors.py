@@ -1,6 +1,7 @@
 import torch as th
 from torch.distributions import Categorical
 from .epsilon_schedules import DecayThenFlatSchedule
+from utils.distribution import REGISTRY as pd_REGISTRY
 
 REGISTRY = {}
 
@@ -63,3 +64,21 @@ class EpsilonGreedyActionSelector():
 
 
 REGISTRY["epsilon_greedy"] = EpsilonGreedyActionSelector
+
+class ContinuousActionSelector():
+    
+    def __init__(self, args):
+        self.args = args
+
+        self.schedule = DecayThenFlatSchedule(args.epsilon_start, args.epsilon_finish, args.epsilon_anneal_time,
+                                              decay="linear")
+        self.epsilon = self.schedule.eval(0)
+        self.pd = pd_REGISTRY[args.pd]
+    
+    def select_action(self, agent_inputs, action_lowerbound, action_upperbound, t_env, test_mode=False):
+        # Get distribution
+        pd = self.pd(agent_inputs)
+        picked_actions = pd.sample()
+        if test_mode:
+            picked_actions = th.clamp(picked_actions.clone().detach(), action_lowerbound, action_upperbound)
+        return picked_actions
